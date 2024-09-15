@@ -18,9 +18,7 @@ def get_output_label(output, input_ind=None):
         _, k_org = torch.max(output.data[input_ind,:],0)
     else:
         _, k_org = torch.max(output.data,1)
-
-
-    k_org = k_org[0]
+        k_org = k_org[0]
 
     return k_org
 
@@ -81,13 +79,15 @@ def manifool_single_target(I_org, net, mode, target,
             gg = torch.cuda.FloatTensor([1,-1])
         else:
             gg = torch.FloatTensor([1,-1])
+            
+        gg = gg.view(1,2)
 
         output[:,[k_org,target]].backward(gg,retain_graph=True)
         w_tar = x.grad.data + 0
         w_tar = w_tar.view(n,1)
-
+        
         try:
-            u_tar = torch.gels(w_tar,J_n)[0]
+            u_tar = torch.linalg.lstsq(J_n, w_tar)[0]
             u_tar = u_tar[:J_n.size()[1]]
             try:
                 dist = abs(output.data[0, target] - output.data[0, k_org]) / (J_n.mm(u_tar)).norm()
@@ -95,6 +95,7 @@ def manifool_single_target(I_org, net, mode, target,
                 dist = np.inf
             u_tar.squeeze_()
         except Exception as e:
+                        
             u_tar = None
             dist = np.inf
 
@@ -145,14 +146,14 @@ def manifool_single_target(I_org, net, mode, target,
             diff_curr = f_org - output.data[:,target]
             diff_x, s = torch.max((diff_pre - diff_curr),0)
 
-            if diff_max < diff_x[0]:
-                diff_max = diff_x[0]
+            if diff_max < diff_x.item():
+                diff_max = diff_x.item()
                 s_final = s + ind
-                k_I = get_output_label(output,s[0])
-                chosen_diff = diff_curr[s[0]]
-                I_chosen = I_batch[s[0],:].clone()
+                k_I = get_output_label(output,s)
+                chosen_diff = diff_curr[s]
+                I_chosen = I_batch[s,:].clone()
 
-        s = s_final[0]
+        s = s_final
 
         return step_sizes[s], chosen_diff, I_chosen, k_I
 
