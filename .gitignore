@@ -9,3 +9,5 @@ ILSVRC_val/
 *.npz
 *.png
 .idea/
+
+*.ipynb
