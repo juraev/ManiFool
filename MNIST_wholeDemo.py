@@ -5,11 +5,30 @@ import numpy as np
 import torch
 import torchvision
 import torchvision.transforms as transform
+from torch import nn
+from torch.nn import functional as F
 
 from functions.algorithms.manifool import manifool
-from models.manitest_cnn import ManitestMNIST_net as Net
+# from models.manitest_cnn import ManitestMNIST_net as Net
 from torch.autograd import Variable
 from torch.nn.functional import softmax
+
+class Net(nn.Module):
+
+    def __init__(self):
+        super(Net,self).__init__()
+        self.conv1 = nn.Conv2d(1, 32, 5, padding = 2)
+        self.conv2 = nn.Conv2d(32, 64, 5)
+        self.conv3 = nn.Conv2d(64,10,5)
+        self.pool = nn.MaxPool2d(2,2)
+
+    def forward(self,x):
+        x = self.conv1(x)
+        x = self.pool(F.relu(x))
+        x = self.pool(F.relu(self.conv2(x)))
+        x = self.conv3(x)
+        x = x.view(-1, 10)
+        return x
 
 # Parameter
 num_trials = 500
@@ -44,7 +63,7 @@ for i,k in enumerate(im_ind):
 
     out = manifool(im, net, mode,
                    maxIter=maxIt,
-                   cuda_on=True,
+                   cuda_on=False,
                    step_sizes = step_sizes,
                    gamma = gamma,
                    numerical=True,
