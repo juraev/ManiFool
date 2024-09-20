@@ -52,7 +52,7 @@ def apply_transform(x, transform, fill_mode='constant', fill_value=0., interp_or
     transform = transform_matrix_offset_center(transform, x.size()[2], x.size()[1])
 
     if x.is_cuda:
-        out = torch.cuda.FloatTensor(x.size())
+        out = torch.empty(x.size(), dtype=torch.float32, device='cuda')
         proj_warp_gpu(transform.float().cuda(), x, out)
 
     else:

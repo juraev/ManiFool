@@ -37,7 +37,7 @@ def make_algebra_matrix(tau, mode):
     Output:
     :array B: 3x3 matrix on the Lie algebra of mode
     """
-    tau.squeeze_()
+    # tau.squeeze_()
 
     if mode == 'rotation':
         B = np.array([[0,-tau[0],0],[tau[0],0,0],[0,0,0]])
@@ -79,7 +79,7 @@ def para2tfm (tau, mode, interp):
     Output:
     :Transform tfm: mapped transform
     """
-    B = make_algebra_matrix(tau, mode)
+    B = make_algebra_matrix(tau.detach().cpu(), mode)
 
     tform_matrix = torch.from_numpy(slin.expm(B))
 
@@ -157,9 +157,9 @@ def jacobian (I_org, I, tfm, mode,interp_order):
     d = tau.size()[0]
 
     if I_org.is_cuda:
-        J = torch.cuda.FloatTensor(torch.Size([d])+I.size())
+        J = torch.empty((d,) + I.size(), device='cuda', dtype=torch.float32)
     else:
-        J = torch.Tensor(torch.Size([d])+I.size())
+        J = torch.empty((d,) + I.size(), dtype=torch.float32)
 
     for k in range(d):
         tau_ = tau.clone()

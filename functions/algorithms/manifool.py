@@ -75,10 +75,8 @@ def manifool_single_target(I_org, net, mode, target,
         if x.grad is not None:
             x.grad.data.zero_()
 
-        if cuda_on:
-            gg = torch.cuda.FloatTensor([1,-1])
-        else:
-            gg = torch.FloatTensor([1,-1])
+        device = torch.device('cuda' if cuda_on else 'cpu')
+        gg = torch.tensor([1, -1], dtype=torch.float32, device=device)
             
         gg = gg.view(1,2)
 
@@ -118,10 +116,8 @@ def manifool_single_target(I_org, net, mode, target,
         :Tensor I_chosen: the transformed image for step size s
         :int k_I: the label of I_chosen
         """
-        if I_org.is_cuda:
-            I_batch = torch.cuda.FloatTensor(torch.Size((batch_size,))+I_org.size())
-        else:
-            I_batch = torch.FloatTensor(torch.Size((batch_size,))+I_org.size())
+        
+        I_batch = torch.empty((batch_size,) + I_org.size(), dtype=torch.float32, device=I_org.device)
 
         diff_max = -np.inf
         for ind in range(0,len(step_sizes),batch_size):

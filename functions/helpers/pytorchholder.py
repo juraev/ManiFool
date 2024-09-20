@@ -10,5 +10,5 @@ class Holder(drv.PointerHolderBase):
         super(Holder, self).__init__()
         self.t = t
         self.gpudata = t.data_ptr()
-    def get_pointer():
+    def get_pointer(self):
         return self.t.data_ptr()

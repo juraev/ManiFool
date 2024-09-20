@@ -101,7 +101,7 @@ int nChannels
 }
 """
 
-x = torch.cuda.FloatTensor(8)
+x = torch.empty(8, device='cuda', dtype=torch.float32)
 
 mod = SourceModule(_kernel_)
 projective_warp = mod.get_function("projective_warp")
