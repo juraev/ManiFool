@@ -11,3 +11,4 @@ ILSVRC_val/
 .idea/
 
 *.ipynb
+*.pth
