@@ -161,6 +161,7 @@ def manifool_single_target(I_org, net, mode, target,
     if cuda_on:
         net.cuda()
         I_org = I_org.cuda()
+    net.eval()
 
     I = I_org.clone()
 
