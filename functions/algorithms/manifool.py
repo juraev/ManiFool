@@ -354,6 +354,8 @@ def manifool(I_org, net, mode,
     
     assert x.device == net.conv1.weight.device
     assert len(x.shape) == 4
+    #also assert if x is float 
+    assert x.dtype == torch.float32
     
     with torch.no_grad():
         net.eval()
