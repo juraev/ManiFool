@@ -135,7 +135,7 @@ def manifool_single_target(I_org, net, mode, target,
                 I_c = I_batch
 
             # Calculate g_l in batch and find the minimizing step size
-            x = Variable(I_c, requires_grad = True)
+            x = Variable(I_c.unsqueeze(0).to(next(net.parameters()).device), requires_grad=True)
 
             output = net(x)
             f_org = output.data[:,k_org]
