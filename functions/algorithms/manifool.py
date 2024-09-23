@@ -347,8 +347,9 @@ def manifool(I_org, net, mode,
 
     x = Variable(I_c.unsqueeze(0),requires_grad = True)
     
-    net.eval()
-    output = net(x)
+    with torch.no_grad():
+        net.eval()
+        output = net(x)
     _, inds = output.data.squeeze().sort(dim=0, descending=True)
 
     top_inds = inds[1:N_c+1] #choose top N_c labels for running binary ManiFool
