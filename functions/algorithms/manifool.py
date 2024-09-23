@@ -344,8 +344,16 @@ def manifool(I_org, net, mode,
         I_c = g.center_crop_tensor(I,crop)
     else:
         I_c = I
+    
+    print(I_c.device)
 
     x = Variable(I_c.unsqueeze(0),requires_grad = True)
+    
+    print(x.device)
+    print(x.shape)
+    
+    assert x.device == net.conv1.weight.device
+    assert len(x.shape) == 4
     
     with torch.no_grad():
         net.eval()
