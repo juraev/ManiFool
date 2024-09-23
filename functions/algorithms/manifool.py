@@ -135,7 +135,7 @@ def manifool_single_target(I_org, net, mode, target,
                 I_c = I_batch
 
             # Calculate g_l in batch and find the minimizing step size
-            x = Variable(I_c.unsqueeze(0).to(next(net.parameters()).device), requires_grad=True)
+            x = Variable(I_c.to(next(net.parameters()).device), requires_grad=True)
 
             output = net(x)
             f_org = output.data[:,k_org]
@@ -161,7 +161,6 @@ def manifool_single_target(I_org, net, mode, target,
     if cuda_on:
         net.cuda()
         I_org = I_org.cuda()
-    net.eval()
 
     I = I_org.clone()
 
@@ -333,10 +332,12 @@ def manifool(I_org, net, mode,
     """
 
     out = {}
+    
+    device = torch.device('cuda' if cuda_on else 'cpu')
 
     if cuda_on:
-        net.cuda()
-        I_org = I_org.cuda()
+        net = net.to(device)
+        I_org = I_org.to(device)
 
     I = I_org.clone()
 
@@ -345,21 +346,11 @@ def manifool(I_org, net, mode,
     else:
         I_c = I
     
-    print(I_c.device)
 
-    x = Variable(I_c.unsqueeze(0),requires_grad = True)
+    x = Variable(I_c.unsqueeze(0),requires_grad = True)    
     
-    print(x.device)
-    print(x.shape)
+    output = net(x)
     
-    assert x.device == net.conv1.weight.device
-    assert len(x.shape) == 4
-    #also assert if x is float 
-    assert x.dtype == torch.float32
-    
-    with torch.no_grad():
-        net.eval()
-        output = net(x)
     _, inds = output.data.squeeze().sort(dim=0, descending=True)
 
     top_inds = inds[1:N_c+1] #choose top N_c labels for running binary ManiFool
