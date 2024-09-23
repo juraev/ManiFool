@@ -346,7 +346,8 @@ def manifool(I_org, net, mode,
         I_c = I
 
     x = Variable(I_c.unsqueeze(0),requires_grad = True)
-
+    
+    net.eval()
     output = net(x)
     _, inds = output.data.squeeze().sort(dim=0, descending=True)
 
