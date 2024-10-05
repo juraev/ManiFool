@@ -52,7 +52,7 @@ def projective_transform_2d(im,
     if im.is_cuda:
         from .gpu_projective import proj_warp_gpu
         x = torch.cuda.FloatTensor(im.size())
-        proj_warp_gpu(transform.float().cuda(), im, x)
+        x = proj_warp_gpu(transform.float().cuda(), im)
 
     else:
         ptfm = ProjectiveTransform(transform.numpy())

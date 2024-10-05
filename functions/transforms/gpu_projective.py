@@ -1,143 +1,51 @@
-import numpy as np
 import torch
-import torch.cuda
-import pycuda.autoinit
+import torch.nn.functional as F
 
-from ..helpers.pytorchholder import Holder
-
-from pycuda.compiler import SourceModule
-
-_kernel_ = """
-#include <stdio.h>
-
-__device__ void calc_target(
-int x,
-int y,
-float* H,
-float* target_coord
-)
-{
-    float divisor;
-
-    divisor = x*H[6] + y*H[7] + H[8];
-
-    target_coord[0] = (x*H[0] + y*H[1] + H[2])/divisor;
-    target_coord[1] = (x*H[3] + y*H[4] + H[5])/divisor;
-}
-
-
-__global__ void projective_warp(
-float* img,
-float* img_warped,
-float* H,
-int nPts,
-int nx,
-int ny,
-int nChannels
-)
-{
-    int idx = threadIdx.x + blockIdx.x*blockDim.x;
-
-    if (idx>=nPts)
-        return;
-
-    int y = idx/nx;
-    int x = idx - nx*y;
-
-    float target_coord [2];
-    float x_frac, y_frac;
-    float x_t, y_t;
-
-    calc_target(x,y,H, target_coord);
-
-    x_frac = modf(target_coord[0],&x_t);
-    y_frac = modf(target_coord[1],&y_t);
-
-    int idx00, idx01, idx10, idx11;
-    float f00, f01, f10, f11, new_val;
-
-    if (x_t>=nx || y_t>=ny || x_t < -1 || y_t < -1){
-        for(int i=0;i < nChannels; i++)
-            img_warped[idx + i*nPts] = 0.0;
-        return;
-    }
-
-    idx00 = int(x_t + y_t*nx);
-    idx01 = idx00 + nx;
-    idx10 = idx00 + 1;
-    idx11 = idx00 + nx + 1;
-
-
-    for (int i=0;i < nChannels; i++){
-
-        if (x_t<0 || y_t<0)
-           f00 = 0.0;
-        else
-           f00 = img[idx00 + i*nPts];
-
-        if (x_t<0 || y_t>=ny-1)
-           f01 = 0.0;
-        else
-           f01 = img[idx01 + i*nPts];
-
-        if (x_t>=nx-1 || y_t<0)
-           f10 = 0.0;
-        else
-           f10 = img[idx10 + i*nPts];
-
-        if (x_t>=nx-1 || y_t>=ny-1)
-           f11 = 0.0;
-        else
-           f11 = img[idx11 + i*nPts];
-
-        new_val = f00*(1-x_frac)*(1-y_frac) + f10*x_frac*(1-y_frac)
-                  +f01*(1-x_frac)*y_frac + f11*x_frac*y_frac;
-
-        img_warped[idx + i*nPts] = new_val;
-
-    }
-
-    return;
-}
-"""
-
-x = torch.empty(8, device='cuda', dtype=torch.float32)
-
-mod = SourceModule(_kernel_)
-projective_warp = mod.get_function("projective_warp")
-
-def proj_warp_gpu(H_gpu,
-                  img_gpu,
-                  img_wrapped_gpu,
-                  threadsPerBlock = 1024):
+def proj_warp_gpu(H_gpu, img_gpu):
     """
-    Applies the geodesic transformation using the transformation matrix H_gpu.
+    Applies the projective transformation using the transformation matrix H_gpu.
 
-    :CUDA Tensor H_gpu: 3x3 transformation matrix
-    :CUDA Tensor img_gpu: the image to be transformed
-    :CUDA Tensor img_wrapped_gpu: container for the transformed image. This will become the output image.
-    :int threadsPerBlock: number of CUDA threads per block (must be multiple of 32, 1024 is max)
+    :Tensor H_gpu: 3x3 transformation matrix
+    :Tensor img_gpu: the image to be transformed (C x H x W)
 
+    :returns: transformed image (C x H x W)
     """
-    if not isinstance(img_gpu,torch.cuda.FloatTensor):
-        raise TypeError(type(img_gpu))
-    if not isinstance(img_wrapped_gpu,torch.cuda.FloatTensor):
-        raise TypeError(type(img_wrapped_gpu))
-    if not isinstance(H_gpu,torch.cuda.FloatTensor):
-        raise TypeError(type(H_gpu))
+    if not isinstance(img_gpu, torch.Tensor):
+        raise TypeError(f"Expected img_gpu to be a torch.Tensor but got {type(img_gpu)}")
+    if not isinstance(H_gpu, torch.Tensor):
+        raise TypeError(f"Expected H_gpu to be a torch.Tensor but got {type(H_gpu)}")
 
-    nChannels = img_gpu.size()[0]
-    ny,nx = img_gpu.size()[1:]
-    nPts = ny*nx
+    if img_gpu.dim() != 3:
+        raise ValueError("img_gpu should have shape (C, H, W)")
+    nChannels, ny, nx = img_gpu.shape
 
-    nBlocks = int(np.ceil(nPts/threadsPerBlock))
+    device = img_gpu.device
 
-    projective_warp(Holder(img_gpu),
-                    Holder(img_wrapped_gpu),
-                    Holder(H_gpu),
-                    np.int32(nPts),
-                    np.int32(nx),
-                    np.int32(ny),
-                    np.int32(nChannels),
-                    grid=(nBlocks,1,1),
-                    block=(int(threadsPerBlock),1,1))
+    # Create grid of coordinates
+    x = torch.arange(nx, device=device)
+    y = torch.arange(ny, device=device)
+    grid_y, grid_x = torch.meshgrid(y, x, indexing='ij')  # grid_x, grid_y shape (ny, nx)
+    coords = torch.stack([grid_x, grid_y], dim=2).float()  # shape (ny, nx, 2)
+    coords_flat = coords.view(-1, 2)  # shape (ny * nx, 2)
+    ones = torch.ones(coords_flat.size(0), 1, device=device)
+    coords_hom = torch.cat([coords_flat, ones], dim=1).t()  # shape (3, ny * nx)
+
+    # Apply homography
+    source_coords_hom = H_gpu @ coords_hom  # shape (3, ny * nx)
+    source_coords = source_coords_hom[:2, :] / source_coords_hom[2:, :]  # shape (2, ny * nx)
+    source_coords = source_coords.t().view(ny, nx, 2)  # shape (ny, nx, 2)
+
+    # Normalize coordinates to [-1, 1]
+    source_coords_normalized = torch.zeros_like(source_coords)
+    source_coords_normalized[..., 0] = 2.0 * source_coords[..., 0] / (nx - 1) - 1.0
+    source_coords_normalized[..., 1] = 2.0 * source_coords[..., 1] / (ny - 1) - 1.0
+
+    # Adjust for grid_sample coordinate system (x, y)
+    grid = source_coords_normalized.unsqueeze(0)  # shape (1, ny, nx, 2)
+    img_gpu = img_gpu.unsqueeze(0)  # shape (1, C, ny, nx)
+
+    # Perform grid sampling
+    warped_img = F.grid_sample(img_gpu, grid, mode='bilinear', padding_mode='zeros', align_corners=True)
+    warped_img = warped_img.squeeze(0)  # shape (C, ny, nx)
+
+    return warped_img
